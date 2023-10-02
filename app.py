@@ -2,13 +2,14 @@ from shiny import App, render, ui, reactive
 # import matplotlib.pyplot as plt
 import plotly.graph_objs as go
 import plotly.express as px
-from shinywidgets import output_widget, register_widget
+from shinywidgets import output_widget, render_widget
 
 import numpy as np
 from skimage import io
 from skimage.feature import peak_local_max
 
-image = io.imread("20230921_RI510_TPR-A488_DAPI_006_SIR_ALX_THR_C0.ome.tiff")
+image = io.imread("20230530_RI510_TPR-A488_001_SIR_PRJ.dv.ome.tif")
+image = np.expand_dims(image, 0)
 
 app_ui = ui.page_fluid(
     ui.panel_title("Nuclear pores are cool. Let's count them!"),
@@ -40,6 +41,7 @@ app_ui = ui.page_fluid(
             ui.input_slider("z_position", "Z position", 0, image.shape[0], image.shape[0] // 2),
             ui.input_checkbox("show_pores", "Show detected pores", False),
             output_widget("image_plot"),
+            # ui.output_plot("image_plot"),
             # ui.output_text_verbatim("image_plot")
         )
     )
@@ -47,9 +49,9 @@ app_ui = ui.page_fluid(
 
 
 def server(input, output, session):
-    image_widget = go.FigureWidget(px.imshow(image[input.z_position(), :, :], color_continuous_scale='gray'))
+    # image_widget = go.FigureWidget(px.imshow(image[input.z_position(), :, :], color_continuous_scale='gray'))
 
-    register_widget("image_plot", image_widget)
+    # register_widget("image_plot", image_widget)
 
     # @reactive.Effect
     # def _():
@@ -86,23 +88,47 @@ def server(input, output, session):
         )
 
 
-    # @output
+    @output
     # @render.plot(alt="nuclear pores")
-    # # @render.text
-    # def image_plot():
-    #     input.count()
-    #
-    #     with reactive.isolate():
-    #         peaks = count_pores()
-    #
-    #     imgplot = plt.imshow(image[input.z_position(), :, :])
-    #     imgplot.set_cmap('gray')
-    #     # plt.colorbar()
-    #     z_peaks = peaks[(peaks[:, 0] == input.z_position())]
-    #     imgplot.set_clim(image.min(), image.max())
-    #     plt.plot(z_peaks[:, 2], z_peaks[:, 1], 'r.')
-    #     # return z_peaks
-    #     return imgplot
+    # @render
+    @render_widget
+    def image_plot():
+        input.count()
+
+        with reactive.isolate():
+            peaks = count_pores()
+
+        imgplot = px.imshow(
+            image[input.z_position(), :, :],
+            zmin=image.min(),
+            zmax=image.max(),
+            color_continuous_scale="gray",
+            )
+        imgplot.layout.height = 1024
+        imgplot.update_layout(coloraxis_showscale=False)
+        imgplot.update_xaxes(showticklabels=False)
+        imgplot.update_yaxes(showticklabels=False)
+        reference_peaks = go.Scatter(x=peaks[:, 2],
+                                     y=peaks[:, 1],
+                                     mode="markers",
+                                     showlegend=False)
+
+        imgplot.add_trace(reference_peaks)
+
+        # imgplot.set_cmap('gray')
+        # plt.colorbar()
+        # z_peaks = peaks[(peaks[:, 0] == input.z_position())]
+        # imgplot.set_clim(image.min(), image.max())
+        # plt.plot(z_peaks[:, 2], z_peaks[:, 1], 'r.')
+        # return z_peaks
+        imgplot.data[1].visible = input.show_pores()
+
+        return imgplot
+
+    # @reactive.Effect
+    # def _():
+    #     image_plot.data[1].visible = input.show_pores()
+
 
 
 app = App(app_ui, server)
